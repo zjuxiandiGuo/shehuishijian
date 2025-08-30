@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>社会实践报告生成游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        .choice-btn, .next-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .choice-btn:hover, .next-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        #report-content {
+            white-space: pre-wrap;
+            line-height: 1.8;
+            text-align: justify;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-4xl bg-white rounded-xl shadow-lg p-6 md:p-10 mx-auto">
+
+        <!-- 游戏界面 -->
+        <div id="game-container">
+            <div id="step-indicator" class="text-sm text-blue-600 font-semibold mb-2"></div>
+            <h1 id="question-title" class="text-2xl md:text-3xl font-bold mb-6 text-gray-900"></h1>
+            <div id="choices-container">
+                <!-- 选项或输入框将在这里动态生成 -->
+            </div>
+        </div>
+
+        <!-- 加载界面 -->
+        <div id="loading-container" class="hidden text-center py-16">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
+            <h2 class="text-2xl font-bold text-gray-900">正在生成您的专属报告...</h2>
+            <p class="text-gray-600 mt-2">请稍候，正在根据您的选择为您撰写独特的实践感悟。</p>
+        </div>
+
+        <!-- 报告显示界面 -->
+        <div id="report-container" class="hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
+                <h2 class="text-2xl md:text-3xl font-bold text-gray-900">您的社会实践报告</h2>
+                <button id="copy-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300 w-full sm:w-auto">复制报告全文</button>
+            </div>
+            <div id="report-output" class="bg-gray-50 p-6 rounded-lg max-h-[60vh] overflow-y-auto">
+                <pre id="report-content" class="text-base text-gray-800"></pre>
+            </div>
+            <div class="mt-6 text-center">
+                 <button id="restart-btn" class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition duration-300">重新开始</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const loadingContainer = document.getElementById('loading-container');
+        const reportContainer = document.getElementById('report-container');
+        const questionTitle = document.getElementById('question-title');
+        const choicesContainer = document.getElementById('choices-container');
+        const stepIndicator = document.getElementById('step-indicator');
+        const reportContent = document.getElementById('report-content');
+        const copyBtn = document.getElementById('copy-btn');
+        const restartBtn = document.getElementById('restart-btn');
+
+        let currentStep = 0;
+        const userChoices = {};
+
+        const gameSteps = [
+             // Part 1: Basic Setup (5 steps)
+            { question: "请选择您的身份：", key: 'identity', choices: [ { text: "大学生", value: "大学生", details: "侧重于初次体验、个人成长与社会认知。" }, { text: "研究生", value: "研究生", details: "侧重于结合专业知识进行深度观察与分析。" } ] },
+            { question: "请选择你的社会实践主题：", key: 'theme', choices: [ { text: "支教助学", value: "支教助学", details: "前往偏远地区或社区，为孩子们提供学业辅导和兴趣培养。" }, { text: "社区服务", value: "社区服务", details: "深入城市社区，为特定人群（如老人、儿童）提供志愿服务。" }, { text: "“返家乡”实践", value: "返家乡", details: "回到家乡，在政府部门或企业参与实践，了解家乡发展。" }, { text: "环保宣传", value: "环保宣传", details: "组织或参与环保活动，向公众宣传环保理念，改善环境。" } ] },
+            { question: "请输入具体的实践地点名称：", key: 'customLocation', type: 'input', placeholder: '例如：河南省安阳市XX社区' },
+            { question: "你的实践单位/地点类型是？", key: 'location', choices: { '支教助学': [ { text: "偏远山区小学", value: "偏远山区小学", details: "基础设施相对薄弱，学生多为留守儿童。" }, { text: "城市流动儿童社区", value: "城市流动儿童社区", details: "服务于随父母进城务工的儿童群体。" } ], '社区服务': [ { text: "阳光养老院", value: "阳光养老院", details: "为老年人提供生活照料和精神慰藉。" }, { text: "四叶草社区文化中心", value: "四叶草社区文化中心", details: "组织社区文化活动，服务各年龄段居民。" } ], '返家乡': [ { text: "乡镇政府办公室", value: "乡镇政府办公室", details: "参与基层政务，处理文件、协助会议等。" }, { text: "本地知名企业", value: "本地知名企业", details: "在企业市场部或行政部实习，了解企业运作。" } ], '环保宣传': [ { text: "城市中央公园", value: "城市中央公园", details: "人流量大，适合进行公众宣传和垃圾分类指导。" }, { text: "母亲河沿岸", value: "母亲河沿岸", details: "进行水质检测、垃圾清理和环保知识科普。" } ] } },
+            { question: "你的实践时长是多久？", key: 'duration', choices: [ { text: "两周左右", value: "两周左右", details: "一次短暂而紧凑的初步体验。" }, { text: "一个月", value: "一个月", details: "比较完整的周期，能深入参与工作。" }, { text: "两个月或更长", value: "两个月或更长", details: "长期深入实践，能见证一些变化。" } ] },
+            // Part 2: Preparation Phase (2 steps)
+            { question: "在出发前的准备阶段，你的主要精力放在了哪里？", key: 'preparation', choices: [ { text: "查阅文献与理论学习", value: "查阅文献与理论学习", details: "为实践打下坚实的理论基础。" }, { text: "设计详细的活动方案", value: "设计详细的活动方案", details: "将想法细化为可执行的步骤。" }, { text: "进行线上团队沟通与分工", value: "进行线上团队沟通与分工", details: "确保团队成员目标一致，协作高效。" }, { text: "采购与准备所需物资", value: "采购与准备所需物资", details: "兵马未动，粮草先行。" } ] },
+            { question: "踏上实践征程的那一刻，你的心情是？", key: 'feelingStart', choices: [ { text: "满怀期待与激动", value: "满怀期待与激动", details: "渴望在新的环境中大展拳脚。" }, { text: "略带紧张与不安", value: "略带紧张与不安", details: "对未知的挑战感到一丝忐忑。" }, { text: "平静而坚定", value: "平静而坚定", details: "将其视为一次必须完成的成长任务。" } ] },
+             // Part 3: Practice in Action (6 steps)
+            { question: "在实践中，你投入精力最多的核心工作是？", key: 'activity', choices: { '偏远山区小学': [ { text: "课程辅导与作业答疑", value: "课程辅导与作业答疑", details: "主要负责语文、数学等主科的辅导工作。" }, { text: "组织兴趣小组活动", value: "组织兴趣小组活动", details: "如绘画、音乐、体育等，丰富孩子们的课余生活。" } ], '城市流动儿童社区': [ { text: "开设暑期安全课堂", value: "开设暑期安全课堂", details: "讲解交通、防溺水、防诈骗等安全知识。" }, { text: "进行家庭走访与沟通", value: "进行家庭走访与沟通", details: "了解孩子们的家庭情况，建立信任。" } ], '阳光养老院': [ { text: "陪伴老人聊天解闷", value: "陪伴老人聊天解闷", details: "倾听他们的故事，进行情感上的交流。" }, { text: "组织策划文娱活动", value: "组织策划文娱活动", details: "如棋牌、歌唱、健康操等，活跃养老院气氛。" } ], '四叶草社区文化中心': [ { text: "协助组织社区读书会", value: "协助组织社区读书会", details: "负责活动宣传、场地布置和现场协调。" }, { text: "维护社区公共设施", value: "维护社区公共设施", details: "如图书角、健身器材等的日常清洁与报修。" } ], '乡镇政府办公室': [ { text: "整理归档文件资料", value: "整理归档文件资料", details: "学习公文处理流程，进行分类、编号、存档。" }, { text: "参与走访调研活动", value: "参与走访调研活动", details: "跟随前辈下乡，记录民情民意。" } ], '本地知名企业': [ { text: "策划线上推广活动", value: "策划线上推广活动", details: "参与社交媒体的内容创作和用户互动。" }, { text: "协助处理行政事务", value: "协助处理行政事务", details: "负责会议记录、物料采购等日常工作。" } ], '城市中央公园': [ { text: "宣传垃圾分类知识", value: "宣传垃圾分类知识", details: "向游客发放宣传册，现场讲解分类方法。" }, { text: "维护园区环境卫生", value: "维护园区环境卫生", details: "组织志愿者团队，定期清理卫生死角。" } ], '母亲河沿岸': [ { text: "进行水质样本采集", value: "进行水质样本采集", details: "学习使用简易水质检测工具，记录数据。" }, { text: "清理沿岸塑料垃圾", value: "清理沿岸塑料垃圾", details: "对河岸的塑料瓶、包装袋等进行集中清理。" } ] } },
+            { question: "刚开始实践时，你遇到的第一个挑战是什么？", key: 'challenge', choices: [ { text: "与服务对象沟通不畅", value: "与服务对象沟通不畅", details: "存在语言、代沟或信任障碍。" }, { text: "对实践环境与生活不适应", value: "对实践环境与生活不适应", details: "气候、饮食或住宿条件与预期有差距。" }, { text: "实际工作任务超出预期难度", value: "实际工作任务超出预期难度", details: "发现自己所学知识不足以轻松应对。" }, { text: "团队内部出现不同意见", value: "团队内部出现不同意见", details: "在工作方向或方法上产生了分歧。" } ] },
+            { question: "你是如何克服这个挑战的？", key: 'solution', choices: { '与服务对象沟通不畅': [ { text: "耐心倾听并学习当地方言或沟通方式", value: "耐心倾听，并学习当地方言或沟通方式", details: "用真诚和尊重打破隔阂。" }, { text: "请教经验丰富的前辈或当地人", value: "请教经验丰富的前辈或当地人", details: "借鉴他们的智慧和方法。" } ], '对实践环境与生活不适应': [ { text: "积极调整心态主动适应新环境", value: "积极调整心态，主动适应新环境", details: "把困难当作一种磨练。" }, { text: "与同伴相互鼓励共同面对", value: "与同伴相互鼓励，共同面对", details: "团队的温暖是最好的支持。" } ], '实际工作任务超出预期难度': [ { text: "利用业余时间查资料学习新技能", value: "利用业余时间查阅资料，学习新技能", details: "在实践中学习，是最高效的学习。" }, { text: "虚心向实践单位的老师或前辈求助", value: "虚心向实践单位的老师或前辈求助", details: "承认不足，并积极寻求帮助。" } ], '团队内部出现不同意见': [ { text: "组织团队会议坦诚沟通寻求共识", value: "组织团队会议，坦诚沟通寻求共识", details: "求同存异，以大局为重。" }, { text: "进行分工合作让每个人发挥长处", value: "进行分工合作，让每个人发挥长处", details: "明确职责，减少摩擦。" } ] } },
+            { question: "实践过程中，哪一件具体的事让你印象最深刻？", key: 'event', choices: [ { text: "一次精心策划的活动获得圆满成功", value: "一次精心策划的活动获得圆满成功", details: "所有的努力都得到了回报。" }, { text: "与一位服务对象进行了一次感人至深的对话", value: "与一位服务对象进行了一次感人至深的对话", details: "心灵的触动，胜过千言万语。" }, { text: "成功处理了一次意料之外的突发状况", value: "成功处理了一次意料之外的突发状况", details: "在压力下展现了应变能力。" }, { text: "收到服务对象亲手制作的小礼物或感谢信", value: "收到服务对象亲手制作的小礼物或感谢信", details: "一份简单却无比珍贵的认可。" } ] },
+            { question: "这件事让你获得了怎样的感悟？", key: 'eventInsight', choices: { '一次精心策划的活动获得圆满成功': [ { text: "周密的计划是成功的一半", value: "周密的计划是成功的一半", details: "明白了充分准备的重要性。" }, { text: "团队协作能创造奇迹", value: "团队协作能创造奇迹", details: "感受到了集体的力量。" } ], '与一位服务对象进行了一次感人至深的对话': [ { text: "真诚是最好的沟通桥梁", value: "真诚是最好的沟通桥梁", details: "理解了用心交流的意义。" }, { text: "每个平凡人都有不平凡的故事", value: "每个平凡人都有不平凡的故事", details: "学会了尊重和倾听。" } ], '成功处理了一次意料之外的突发状况': [ { text: "沉着冷静是解决问题的前提", value: "沉着冷静是解决问题的前提", details: "提升了心理素质和应急能力。" }, { text: "灵活变通比墨守成规更重要", value: "灵活变通比墨守成规更重要", details: "学到了实践中的智慧。" } ], '收到服务对象亲手制作的小礼物或感谢信': [ { text: "微小的善意能汇聚成巨大的温暖", value: "微小的善意能汇聚成巨大的温暖", details: "体会到了人与人之间最纯粹的情感。" }, { text: "付出的价值在于被需要", value: "付出的价值在于被需要", details: "找到了奉献的快乐和意义。" } ] } },
+            { question: "在团队中，你主要扮演了什么角色？", key: 'teamRole', choices: [ { text: "团队负责人或小组长", value: "团队负责人或小组长", details: "负责统筹规划、组织协调和任务分配。" }, { text: "核心骨干成员", value: "核心骨干成员", details: "积极建言献策，并承担关键性工作。" }, { text: "宣传或后勤负责人", value: "宣传或后勤负责人", details: "为团队提供支持，保障实践顺利进行。" }, { text: "积极的参与者和协作者", value: "积极的参与者和协作者", details: "认真完成分配的任务，与队友紧密配合。" } ] },
+             // Part 4: Reflection & Growth (7 steps)
+            { question: "这次实践中最让你感到触动或引发你深入思考的现象是？", key: 'insight', choices: [ { text: "服务对象的淳朴与热情", value: "服务对象的淳朴与热情", details: "他们用最真诚的方式表达感谢，令人动容。" }, { text: "理想与现实的差距", value: "理想与现实的差距", details: "很多问题比想象中更复杂，需要更多耐心和智慧。" }, { text: "团队协作的重要性", value: "团队协作的重要性", details: "个人的力量有限，一个优秀的团队才能克服困难。" }, { text: "理论知识的局限性", value: "理论知识的局限性", details: "书本上的知识在实际应用中需要灵活变通。" } ] },
+            { question: "通过这次实践，你认为自己在哪方面的能力得到了最大提升？", key: 'growth', choices: [ { text: "沟通与人际交往能力", value: "沟通与人际交往能力", details: "学会了与不同年龄、不同背景的人有效沟通。" }, { text: "独立解决问题的能力", value: "独立解决问题的能力", details: "面对突发状况，能冷静分析并找到解决方法。" }, { text: "责任感与社会奉献精神", value: "责任感与社会奉献精神", details: "更深刻地理解了青年人的社会责任。" }, { text: "组织与协调能力", value: "组织与协调能力", details: "在策划和执行活动的过程中，统筹能力变强了。" } ] },
+            { question: "实践结束后，你对服务对象的看法有什么变化？", key: 'viewChange', choices: [ { text: "从最初的同情转变为深深的敬佩", value: "从最初的同情转变为深深的敬佩", details: "发现了他们在平凡生活中的伟大之处。" }, { text: "从感到陌生到建立起亲人般的感情", value: "从感到陌生到建立起亲人般的感情", details: "成为了彼此生命中的一部分。" }, { text: "认识到他们需求的复杂性和多样性", value: "认识到他们需求的复杂性和多样性", details: "明白了简单的物质帮助远远不够。" } ] },
+            { question: "你对“${theme}”这个主题有了哪些新的认识？", key: 'themeInsight', choices: [ { text: "认识到这项工作的长期性和艰巨性", value: "认识到这项工作的长期性和艰巨性", details: "非一日之功，需要社会各界持续努力。" }, { text: "发现了可以创新和改进的新切入点", value: "发现了可以创新和改进的新切入点", details: "思考如何用更科学的方法提升效率。" }, { text: "更深刻地理解了其背后的社会意义", value: "更深刻地理解了其背後の社会意义", details: "它关系到社会的公平、和谐与可持续发展。" } ] },
+            { question: "回顾整个过程，有没有留下什么小小的遗憾？", key: 'regret', choices: [ { text: "未能帮助解决某个遇到的具体问题", value: "未能帮助解决某个遇到的具体问题", details: "深感个人能力有限，还需继续学习。" }, { text: "与某些服务对象的交流不够深入", value: "与某些服务对象的交流不够深入", details: "如果能再多花一些时间就好了。" }, { text: "某个活动的策划或执行不够完美", value: "某个活动的策划或执行不够完美", details: "如果能准备得再充分一些就好了。" }, { text: "未能记录下更多珍贵的瞬间", value: "未能记录下更多珍贵的瞬间", details: "有些感动只留在了记忆里。" } ] },
+            { question: "这次实践对你未来的学习或职业规划有何启发？", key: 'inspiration', choices: [ { text: "坚定了从事相关公益或公共事业的决心", value: "坚定了从事相关公益或公共事业的决心", details: "希望将服务社会作为自己的人生方向。" }, { text: "激发了学习某个新领域知识的浓厚兴趣", value: "激发了学习某个新领域知识的浓厚兴趣", details: "例如社会学、心理学或管理学等。" }, { text: "让我更明确了自己不适合做什么", value: "让我更明确了自己不适合做什么", details: "排除错误选项也是一种宝贵的收获。" }, { text: "认识到提升综合能力比单纯的成绩更重要", value: "认识到提升综合能力比单纯的成绩更重要", details: "未来的竞争是综合素质的竞争。" } ] },
+            { question: "最后，请为你的报告选择一个整体基调：", key: 'tone', choices: [ { text: "热情洋溢，充满激情", value: "热情洋溢，充满激情", details: "文笔昂扬，侧重于展现青春活力和奉献精神。" }, { text: "客观冷静，侧重分析", value: "客观冷静，侧重分析", details: "文笔严谨，侧重于对问题和现象的理性思考。" }, { text: "温情朴实，真挚感人", value: "温情朴实，真挚感人", details: "文笔细腻，侧重于对人与人之间情感的描述。" } ] }
+        ];
+
+
+        function renderStep(stepIndex) {
+            if (stepIndex >= gameSteps.length) {
+                showLoadingAndGenerateReport();
+                return;
+            }
+
+            const step = gameSteps[stepIndex];
+            stepIndicator.textContent = `第 ${stepIndex + 1} 步 / 共 ${gameSteps.length} 步`;
+            
+            let questionText = step.question;
+            if (questionText.includes('${theme}')) {
+                questionText = questionText.replace('${theme}', userChoices.theme || '实践主题');
+            }
+            questionTitle.textContent = questionText;
+            choicesContainer.innerHTML = '';
+
+            if (step.type === 'input') {
+                const inputWrapper = document.createElement('div');
+                inputWrapper.className = 'flex flex-col items-center';
+                inputWrapper.innerHTML = `
+                    <input type="text" id="text-input" class="w-full md:w-2/3 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="${step.placeholder}">
+                    <button id="next-btn" class="next-btn mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700">下一步</button>
+                `;
+                choicesContainer.appendChild(inputWrapper);
+
+                const nextBtn = document.getElementById('next-btn');
+                const textInput = document.getElementById('text-input');
+                
+                nextBtn.addEventListener('click', () => {
+                    if (textInput.value.trim() === '') {
+                        alert('请输入内容！');
+                        return;
+                    }
+                    userChoices[step.key] = textInput.value;
+                    currentStep++;
+                    renderStep(currentStep);
+                });
+                textInput.addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        nextBtn.click();
+                    }
+                });
+
+
+            } else {
+                const choicesGrid = document.createElement('div');
+                choicesGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+                choicesContainer.appendChild(choicesGrid);
+                
+                let currentChoices = [];
+                if (Array.isArray(step.choices)) {
+                    currentChoices = step.choices;
+                } else {
+                    let dependencyValue;
+                    if (step.key === 'location') dependencyValue = userChoices['theme'];
+                    else if (step.key === 'activity') dependencyValue = userChoices['location'];
+                    else if (step.key === 'solution') dependencyValue = userChoices['challenge'];
+                    else if (step.key === 'eventInsight') dependencyValue = userChoices['event'];
+                    else dependencyValue = userChoices[gameSteps[stepIndex - 1].key];
+
+                    currentChoices = step.choices[dependencyValue] || Object.values(step.choices)[0];
+                }
+
+                currentChoices.forEach(choice => {
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.className = 'choice-btn bg-white border border-gray-200 p-5 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50';
+                    buttonContainer.innerHTML = `
+                        <h3 class="font-bold text-lg text-gray-900">${choice.text}</h3>
+                        <p class="text-gray-600 text-sm mt-1">${choice.details}</p>
+                    `;
+                    buttonContainer.addEventListener('click', () => {
+                        userChoices[step.key] = choice.value;
+                        currentStep++;
+                        renderStep(currentStep);
+});
+                    choicesGrid.appendChild(buttonContainer);
+                });
+            }
+        }
+
+        function showLoadingAndGenerateReport() {
+            gameContainer.classList.add('hidden');
+            loadingContainer.classList.remove('hidden');
+
+            setTimeout(() => {
+                const reportText = generateReport(userChoices);
+                reportContent.textContent = reportText;
+                loadingContainer.classList.add('hidden');
+                reportContainer.classList.remove('hidden');
+            }, 2500);
+        }
+
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = reportContent.textContent;
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyBtn.textContent = '复制成功!';
+                setTimeout(() => { copyBtn.textContent = '复制报告全文'; }, 2000);
+            } catch (err) {
+                console.error('复制失败: ', err);
+                copyBtn.textContent = '复制失败';
+            }
+            document.body.removeChild(textArea);
+        });
+
+        restartBtn.addEventListener('click', () => {
+             currentStep = 0;
+             Object.keys(userChoices).forEach(key => delete userChoices[key]);
+             reportContainer.classList.add('hidden');
+             gameContainer.classList.remove('hidden');
+             renderStep(currentStep);
+        });
+
+        function generateReport(c) {
+             // --- Text Snippets for Detailed Generation ---
+            const textSnippets = {
+                feelingStart: {
+                    '满怀期待与激动': `踏上前往${c.customLocation}的征程时，我的内心充满了期待与激动。这不仅是一次简单的社会实践，更是一次检验自我、服务社会的机会，我渴望能在这片新的天地中挥洒汗水，贡献自己的一份力量，不负青春，不负韶华。`,
+                    '略带紧张与不安': `当真正要出发时，我的心情是复杂的，除了对实践的期待，也夹杂着一丝对未知环境的紧张与不安。我反复问自己，是否准备得足够充分？能否胜任即将到来的工作？但这丝忐忑很快便被迎接挑战的决心所取代。`,
+                    '平静而坚定': `我将这次实践看作是一次重要的成长任务和学术调研的预演。因此，出发时我内心平静而坚定，没有过多的情绪波动，而是专注于思考如何以专业的态度和科学的方法去观察、去参与、去解决即将面对的一切问题。`
+                },
+                preparation: {
+                    '查阅文献与理论学习': `在准备阶段，我的工作重心是${c.preparation}。作为一名${c.identity}，我深知理论指导实践的重要性。我通过中国知网、学校图书馆等渠道，系统查阅了关于“${c.theme}”的十余篇相关文献和政策文件，对其实施背景、现状问题和发展趋势有了宏观的把握。这为我后续在实践中进行观察和思考提供了坚实的理论框架，避免了盲目参与和浅层体验。`,
+                    '设计详细的活动方案': `我的准备工作核心在于${c.preparation}。我将“${c.theme}”这一宏大主题分解为一个个具体、可执行的子任务，并围绕核心工作“${c.activity}”制定了详细的时间表、人员分工、物资清单和应急预案。方案的每一个细节都经过反复推敲，确保其科学性、可行性和安全性，这为整个实践活动的有条不紊和高效运行奠定了基础。`,
+                    '进行线上团队沟通与分工': `作为团队中的${c.teamRole}，我的准备工作聚焦于${c.preparation}。我组织了三次线上筹备会议，与团队成员共同学习实践地点的相关资料，明确了“${c.theme}”的核心目标，并根据每个人的特长进行了明确分工。我们建立了高效的沟通机制，确保信息流畅通，为后续的紧密协作和应对突发状况打下了坚实的组织基础。`,
+                    '采购与准备所需物资': `“兵马未动，粮草先行”。我的准备工作主要围绕${c.preparation}展开。根据我们设计的活动方案，我列出了一份详尽的物资清单，小到文具、药品，大到活动道具，都逐一核对、采购和打包。充足的物资保障，是我们能够心无旁骛地投入到实践工作中的前提，也是确保服务质量的关键一环。`
+                },
+                challenge: {
+                    '与服务对象沟通不畅': `实践伊始，我遇到的第一个难题便是${c.challenge}。无论是与孩子们的年龄代沟，还是与老人们的方言障碍，都让我的热情有时无法准确传达，工作一度陷入僵局，让我初次感受到了“纸上谈兵”的无力感。`,
+                    '对实践环境与生活不适应': `初到${c.customLocation}，${c.challenge}成为了我面临的第一个考验。与早已习惯的校园舒适区截然不同的生活条件，例如饮食习惯的差异、住宿条件的简陋，都对我的身体和意志力提出了一场严峻的磨练。`,
+                    '实际工作任务超出预期难度': `真正上手后我才发现，${c.challenge}。例如，看似简单的${c.activity}，背后却牵涉到复杂的沟通技巧和专业知识。书本上的理论和现实情况的复杂性之间存在着巨大的鸿沟，这让我感到了前所未有的压力。`,
+                    '团队内部出现不同意见': `在团队协作初期，${c.challenge}是我们需要共同面对的问题。大家来自不同专业，看问题的角度各异，在工作方向或具体方法上不可避免地产生了分歧，一度影响了团队的凝聚力和工作效率。`
+                },
+                solution: {
+                    '耐心倾听，并学习当地方言或沟通方式': `为了解决沟通问题，我决定${c.solution}。我放慢语速，用最朴实的语言和最真诚的微笑，主动学习一些常用的方言词汇。更重要的是，我学会了首先做一个倾听者，而不是急于表达自己，逐渐拉近了与大家的心理距离。`,
+                    '请教经验丰富的前辈或当地人': `面对沟通障碍，我选择${c.solution}。实践单位的老师和当地的热心居民成为了我最好的老师。他们的经验如同一盏明灯，为我指明了方向，让我学会了如何更接地气、更有效地与服务对象交流。`,
+                    '积极调整心态，主动适应新环境': `面对环境的不适，我知道怨天尤人无济于事，唯一的办法就是${c.solution}。我强迫自己走出舒适区，把艰苦的环境当作一种磨练意志的机会，努力去发现新环境中的美好之处，并从中汲取力量。`,
+                    '与同伴相互鼓励，共同面对': `在陌生的环境中，团队的力量显得尤为重要。我选择${c.solution}。每当夜晚大家聚在一起分享一天的经历和感受时，所有的疲惫和不适都在彼此的温暖支持下烟消云散，我们很快便适应了新的生活。`,
+                    '利用业余时间查阅资料，学习新技能': `为了克服工作上的困难，我${c.solution}，将压力转化为学习的动力。每晚我都会针对当天遇到的问题进行复盘，并通过网络查阅相关资料，迅速弥补了自身能力的不足，确保第二天能更好地完成任务。`,
+                    '虚心向实践单位的老师或前辈求助': `我明白闭门造车是行不通的，于是${c.solution}。我不再害怕暴露自己的不足，而是将问题清晰地整理出来，向他们请教。他们的悉心指导，让我茅塞顿开，工作也得以顺利推进。`,
+                    '组织团队会议，坦诚沟通寻求共识': `为了解决团队分歧，作为${c.teamRole}，我提议${c.solution}。在开诚布公的讨论中，我们本着求同存异、以大局为重的原则，最终统一了思想，凝聚了共识，团队战斗力大大增强。`,
+                    '进行分工合作，让每个人发挥长处': `我们通过${c.solution}的方式化解了矛盾。我们重新审视了每个人的专业背景和性格特长，进行了更科学的分工，明确了各自的职责，从而减少了内耗和摩擦，让团队协作变得更加高效顺畅。`
+                },
+                event: {
+                    '一次精心策划的活动获得圆满成功': `在整个实践过程中，最让我难以忘怀的，是${c.event}。从前期的策划、宣传，到现场的组织、协调，我们团队为之付出了巨大的努力和心血。当看到服务对象们在活动中脸上洋溢的、发自内心的笑容时，那一刻，所有的辛苦都化为了巨大的喜悦和成就感，我深刻体会到努力奋斗的价值。`,
+                    '与一位服务对象进行了一次感人至深的对话': `记忆中最深刻的，是${c.event}。在一个安静的下午，我与一位${c.location}的${c.theme === '社区服务' ? '老人' : '孩子'}促膝长谈，他向我讲述了自己的人生故事和对未来的期盼。那份质朴的情感、那份对生活的热爱与坚韧，深深地触动了我，让我对人生有了新的思考。`,
+                    '成功处理了一次意料之外的突发状况': `令我印象最深的是${c.event}。当时情况紧急，所有人都有些慌乱，但我努力让自己保持冷静，迅速分析情况，和同伴们一起，运用所学知识和团队的力量，最终化险为夷。这次经历极大地锻炼了我的应急处理能力和心理素质，让我变得更加成熟。`,
+                    '收到服务对象亲手制作的小礼物或感谢信': `最让我感动的瞬间，莫过于${c.event}。那份礼物虽然不贵重，那封信的文字虽然朴实，但其中蕴含的真挚情感和对我工作的认可，是我此行收到的最宝贵的财富。它让我真切地感受到，真诚的付出，一定能换来真诚的回应。`
+                },
+                tone: {
+                    '热情洋溢，充满激情': `我坚信，只要我们将个人的理想追求融入党和国家事业之中，将青春的汗水挥洒在实现中华民族伟大复兴的中国梦的伟大征程中，就一定能书写出无愧于时代、无愧于历史、无愧于人民的华彩篇章！`,
+                    '客观冷静，侧重分析': `综上所述，本次社会实践是一次理论与现实的有效碰撞。它促使我以更客观、更理性的视角去观察和分析社会问题。未来，我将继续秉持实事求是的精神，在知行合一的道路上不断探索，为社会发展贡献自己严谨而扎实的力量。`,
+                    '温情朴实，真挚感人': `社会实践终会结束，但人与人之间的温暖连接不会。我会将这份感动珍藏心底，化为前行的动力。在未来的日子里，继续做一个心中有爱、眼中有光的人，用自己的微光，去温暖更多的人。`
+                }
+            };
+            
+            const identityIntro = c.identity === '研究生' ? `作为一名研究生，我深知理论研究与社会实践相结合的重要性。因此，我积极响应学校号召，参加了本次社会实践活动，旨在将我的专业视角与基层实际紧密联系，在服务社会的同时，探索解决现实问题的可行路径，并为后续的学术研究积累鲜活素材。` : `作为新时代的大学生，我们不仅要掌握扎实的专业知识，更应积极投身社会实践，在广阔的社会熔炉中受教育、长才干、作贡献。社会实践是连接校园与社会的桥梁，是检验所学、提升能力的试金石。`;
+            const identityConclusion = c.identity === '研究生' ? `与此同时，我将把这次实践中观察到的现象、收集到的数据与自己的专业领域相结合，进行更深层次的思考与研究，力求将实践感悟转化为严谨的学术成果，为相关领域的发展提供一份来自青年学者的理论支持。` : `我将把这次实践中培养的良好作风和宝贵经验带回到日常的学习生活中，以更加饱满的热情和更加务实的态度，努力学好专业知识，不断提升综合素质。`;
+
+            const title = `关于在${c.customLocation}参加“${c.theme}”社会实践活动的报告`;
+            const abstract = `摘要：本次社会实践以“${c.theme}”为主题，旨在通过亲身参与位于${c.customLocation}的${c.location}的相关工作，将理论知识与社会现实相结合，提升个人综合素养与社会责任感。作为一名${c.identity}，在为期${c.duration}的实践中，本人主要负责${c.activity}等工作，深入了解了服务对象的需求与现状，并对${c.insight}有了深刻体会。实践过程不仅锻炼了本人的${c.growth}，也引发了关于青年学生如何更好地服务社会、实现自我价值的深入思考。本报告将系统梳理实践背景、过程、成果与反思，以期为未来的学习和发展提供有益借鉴。\n\n关键词：社会实践；${c.theme}；${c.customLocation}；${c.growth}`;
+            const intro = `一、引言：背景与意义\n\n青年兴则国家兴，青年强则国家强。${identityIntro}它让我们有机会走出象牙塔，用脚步丈量祖国大地，用眼睛发现中国精神，用耳朵倾听人民呼声，用内心感应时代脉搏。${textSnippets.feelingStart[c.feelingStart] || ''} 正是在这样的认识驱动下，我参加了本次在${c.customLocation}的${c.location}展开的“${c.theme}”主题社会实践活动。\n\n本次实践选择在${c.customLocation}展开，是基于深入的考量。${{'支教助学': `教育是国之大计、党之大计。在我国教育事业飞速发展的今天，城乡之间、区域之间的教育资源不均衡问题依然存在。这里的孩子们渴望知识、需要关爱，能为他们带去一些新的知识和视野，是我义不容辞的责任。`, '社区服务': `社区是社会治理的基本单元，是人民群众安居乐业的家园。作为城市肌理的重要组成部分，其和谐稳定与居民的幸福感息息相关。能为社区的建设贡献一份力量，服务社区居民，是${c.identity}融入社会、服务社会最直接的体现。`, '返家乡': `家乡是生我养我的地方，我对家乡的建设与发展怀有深厚的感情。通过在${c.customLocation}的实践，我希望能深入了解家乡的运作模式与发展现状，将所学知识用于服务家乡，同时也为自己未来的职业规划积累宝贵经验。`, '环保宣传': `绿水青山就是金山银山。在我国生态文明建设进入关键时期的今天，提升全民环保意识，推动绿色发展方式和生活方式的形成至关重要。选择在${c.customLocation}开展环保宣传，是希望通过自己的努力，为建设美丽中国贡献一份青春力量。`}[c.theme]}通过本次为期${c.duration}的实践，我期望能够达到以下几个目的：其一，将理论知识应用于实际，在实践中发现问题、分析问题、解决问题；其二，培养服务意识与奉献精神，深刻理解社会需求与青年责任；其三，提升个人综合能力，特别是${c.growth}，为未来的职业生涯奠定坚实基础。`;
+            const process = `二、实践过程：砥砺前行，知行合一\n\n本次社会实践从前期准备到圆满结束，历时${c.duration}，过程虽然充满挑战，但每一步都走得坚定而充实。\n\n（一）精心筹备，整装待发\n\n凡事预则立，不预则废。在实践开始前，我进行了周密的准备。我的准备重点是${c.preparation}。${textSnippets.preparation[c.preparation] || ''} 充分的准备工作为实践的顺利进行奠定了坚实的基础，也让我得以从容应对后续的各种挑战。\n\n（二）深入实践，躬身力行\n\n实践是本次活动的核心环节，也是最为锻炼人的部分。${textSnippets.challenge[c.challenge] || ''} 面对这个困难，我没有气馁，而是通过${c.solution}的方式，成功克服了挑战。这段经历让我明白，困难是实践的“必修课”，更是成长的“催化剂”。\n\n在整个实践过程中，我的主要工作是${c.activity}。这项工作让我有机会与服务对象深入接触，将所学付诸行动。一个典型的实践日通常是这样度过的：上午，我......；下午，则......；晚上，我会......。日复一日的坚持，让我对这项工作有了更深的理解和感情。\n\n${textSnippets.event[c.event] || ''} 这件事让我深刻地感悟到：${c.eventInsight}。它成为了我此次实践中最宝贵的精神财富，也让我对人与人之间的连接有了新的认识。\n\n在团队协作方面，作为团队中的${c.teamRole}，我始终尽职尽责，努力扮演好自己的角色。我深知，任何一项有意义的社会实践都不是个人英雄主义的表演，而是集体智慧和力量的结晶。我与同伴们紧密协作，相互支持，共同完成了各项任务。这段宝贵的经历让我深刻体会到团队的力量。\n\n（三）复盘总结，深化认识\n\n实践结束后，我并没有就此画上句号，而是及时进行了全面的复盘和总结。我认真梳理了实践期间的工作日志和心得体会，将零散的感悟系统化、理论化。我运用SWOT分析法，剖析了本次实践的优势、劣势、机会与挑战，既肯定了成绩，也找出了不足。总结的过程，是一次自我剖析和思想升华的过程，它让这次实践的价值得到了最大限度的延伸。`;
+            const result = `三、成果与反思：收获满行囊，反思促成长\n\n经过${c.duration}的社会实践，我不仅圆满完成了预定的各项任务，更在思想认识、能力素质等方面取得了显著的成果，同时也对一些问题进行了深入的反思。\n\n（一）实践成果斐然\n\n本次实践的成果是多方面的。首先，在工作层面，我通过参与${c.activity}，为位于${c.customLocation}的${c.location}的${{'支教助学': `教育事业`, '社区服务': `和谐社区建设`, '返家乡': `基层治理与经济发展`, '环保宣传': `生态文明建设`}[c.theme]}贡献了自己的一份微薄力量，得到实践单位和人民群众的普遍认可。其次，在个人成长层面，我的${c.growth}得到了极大的锻炼和提升。我学会了如何将理论知识与实际需求相结合，如何与不同的人群打交道。最后，在思想认识层面，我对国情、社情、民情有了更加深刻和直观的了解。${{'从最初的同情转变为深深的敬佩': `在与服务对象的朝夕相处中，我看到了他们在平凡生活中所展现出的坚韧、乐观与善良，我的心态也${c.viewChange}。这种敬佩，源于他们对生活最本真的热爱。`, '从感到陌生到建立起亲人般的感情': `从一开始的拘谨和陌生，到后来的无话不谈，我与服务对象之间${c.viewChange}，这份情感是我此行最珍贵的收获。我们之间的关系，早已超越了单纯的服务与被服务。`, '认识到他们需求的复杂性和多样性': `深入接触后我才发现，服务对象的需求远比我想象的要复杂，简单的物质帮助远远不够，精神层面的关怀同样重要。这次实践让我${c.viewChange}，也让我对“服务”二字有了更深的理解。`}[c.viewChange]}\n\n（二）深入反思不足\n\n在肯定成绩的同时，我也清醒地认识到自身存在的不足。${{'理想与现实的差距': `我曾一度因为${c.insight}而感到些许挫败。我带着满腔热情和理想化的方案来到实践地，却发现现实中的问题盘根错节，远非一个简单的方案所能解决。这让我认识到，仅有热情是远远不够的，必须学会更多的工作方法和沟通技巧，尊重客观规律。`, '理论知识的局限性': `我发现，许多在学校里学到的理论在面对具体问题时显得“水土不服”，让我深刻认识到${c.insight}。书本构建的知识体系需要经过实践的检验和修正，才能真正转化为解决问题的能力。我必须在未来的学习中更加注重知行合一。`, '团队协作的重要性': `一次活动中的小失误让我深刻体会到${c.insight}。任何一项有意义的工作都离不开团队的默契配合和高效沟通。个人的力量终究有限，只有将个人融入集体，才能发挥出最大的效能。`, '服务对象的淳朴与热情':`虽然${c.insight}让我深受感动，但反思之下，我也意识到自己在某些方面未能给予他们最精准的帮助。有时候，我提供的或许只是我“认为”他们需要的，而并非他们真正渴望的。这提醒我，真正的服务始于倾听和理解。`}[c.insight]} 同时，我也留下了${c.regret}的遗憾，这提醒我在未来的工作中要思考得更周全，做得更完美。通过这次实践，我对“${c.theme}”这个主题也有了新的认识：${c.themeInsight}。这为我未来的学习和研究指明了新的方向。`;
+            const conclusion = `四、总结与展望：青春献祖国，奋进新征程\n\n纸上得来终觉浅，绝知此事要躬行。${c.duration}的社会实践虽然短暂，但它带给我的影响却是深远而持久的。这次经历如同一扇窗，让我窥见了社会的广阔天地；又如同一面镜，让我看清了自身的优势与不足。它不仅是一次简单的社会活动，更是一堂生动的思想政治课、一堂深刻的国情教育课。\n\n通过在${c.customLocation}的实践，我深刻地理解了“从群众中来，到群众中去”的深刻内涵。${c.growth}的提升，则是我未来投身强国建设伟业的底气与资本。这次实践对我的未来规划也产生了重要启发：${c.inspiration}。${identityConclusion}\n\n展望未来，我心潮澎湃。社会实践的结束，是另一段征程的开始。我将以此次实践为新的起点，树立远大理想，热爱伟大祖国，担当时代责任，勇于砥砺奋斗，练就过硬本领，锤炼品德修为，努力成为德智体美劳全面发展的社会主义建设者和接班人。${textSnippets.tone[c.tone] || ''}`;
+
+            return `${title}\n\n${abstract}\n\n${intro}\n\n${process}\n\n${result}\n\n${conclusion}`;
+        }
+        
+        renderStep(currentStep);
+
+    </script>
+</body>
+</html>
+
